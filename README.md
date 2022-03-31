@@ -11,10 +11,10 @@ Convertion:
 
 Distance = (speed * Time) / 2
 
-1 meter == 100cm && 39.3701 inch
-2 meter == 200cm && 78.7402 inch
-3 meter == 300cm && 118.11 inch
-4 meter == 400cm && 157.48 inch
+1 meter == 100cm && 39.3701 inch |
+2 meter == 200cm && 78.7402 inch |
+3 meter == 300cm && 118.11 inch |
+4 meter == 400cm && 157.48 inch |
 
 
 -------------------------------- And we are the FLOODWATCH ----------------------------------
