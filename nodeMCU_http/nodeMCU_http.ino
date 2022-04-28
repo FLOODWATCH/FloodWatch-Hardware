@@ -1,8 +1,5 @@
 #include <Arduino_JSON.h>
 
-
-
-
 #include <ESP8266WebServer.h>
 #include <ESP8266WiFi.h>
 #include <ESP8266HTTPClient.h>
@@ -10,6 +7,368 @@
 #include <WiFiClientSecure.h>
 #include <ArduinoJson.h>
 
+#include <NTPClient.h> //for updated real date and time
+#include <WiFiUdp.h>
+
+
+
+//ultrasonic fields config below
+const int trigPin = 12; //GPIO 12 = D6
+const int echoPin = 14; //GPIO 14 = D5
+long duration, inches, cm;
+
+//http nodeMCU wifi credentials below
+const char* ssid = "GlobeAtHome_8B94E";
+const char* password = "GLRE3HT1Q16";
+
+//our floodwatch backend api url below
+const char *host = "floodwatchbackend.herokuapp.com";
+const int httpsPort = 443;  //HTTPS= 443 and HTTP = 80
+
+//FW BE fingerprint below
+#define TEST_HOST_FINGERPRINT "39a9c4feb17e239e2f4dbbace8d7a34fce430e7b"
+
+//Declare an object of class HTTPClient
+HTTPClient http;
+
+//for NTP Client get date and time config below
+// Define NTP Client to get time
+WiFiUDP ntpUDP;
+NTPClient timeClient(ntpUDP, "pool.ntp.org");
+
+//Week Days
+String weekDays[7]={"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
+//Month names
+String months[12]={"January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"};
+
+
+void setup() {
+  //ultrasonic setup below
+  pinMode(trigPin, OUTPUT); // Sets the trigPin as an Output
+  pinMode(echoPin, INPUT); // Sets the echoPin as an Input
+  Serial.begin(115200); // Starts the serial communication
+
+  //nodeMCU wifi && http setup below
+  Serial.begin(115200);
+  Serial.print("Connecting Wifi: ");
+  Serial.println(ssid);
+  WiFi.begin(ssid, password);
+
+  while (WiFi.status() != WL_CONNECTED) { //testing if we are connected on wifi/internet
+    Serial.print(".");
+    delay(500);
+  }
+  Serial.println("");
+  Serial.println("WiFi connected");
+  Serial.println("IP address: ");
+  IPAddress ip = WiFi.localIP();
+  Serial.println(ip);
+
+
+  //set up date and time config below
+  // Initialize a NTPClient to get time
+  timeClient.begin();
+  // Set offset time in seconds to adjust for your timezone, for example:
+  // GMT +1 = 3600
+  // GMT +8 = 28800
+  // GMT -1 = -3600
+  // GMT 0 = 0
+  timeClient.setTimeOffset(28800);
+}
+
+void loop() {
+  timeClient.update(); //just update time
+
+  time_t epochTime = timeClient.getEpochTime();
+
+  String formattedTime = timeClient.getFormattedTime();
+  int currentHour = timeClient.getHours();
+  int currentMinute = timeClient.getMinutes();
+  int currentSecond = timeClient.getSeconds();
+  String weekDay = weekDays[timeClient.getDay()];
+
+  //Get a time structure
+  struct tm *ptm = gmtime ((time_t *)&epochTime); 
+  
+  int monthDay = ptm->tm_mday; //month day in number
+  int currentMonth = ptm->tm_mon+1; //month in number
+  String currentMonthName = months[currentMonth-1]; //month in name
+  int currentYear = ptm->tm_year+1900; //year in number
+
+
+  String currentDate = String(currentYear) + "-" + String(currentMonth) + "-" + String(monthDay);
+  String DatenTime = (formattedTime + " " + "||" + " " + currentDate);
+  Serial.print("Date and Time: ");
+  Serial.println(DatenTime);
+  Serial.print("Month: ");
+  Serial.println(currentMonthName);
+
+  
+
+  //---------------------------------------------
+  
+  //ultrasonic digital config below
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(2);
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
+
+  duration = pulseIn(echoPin, HIGH);
+  inches = microsecondsToInches(duration);
+  cm = microsecondsToCentimeters(duration);
+
+  //nodeMCU http configs below
+  WiFiClientSecure httpsClient;
+  
+  httpsClient.setFingerprint(TEST_HOST_FINGERPRINT); //check BE webapp fingerprint
+  
+  String apiUrl = "https://floodwatchbackend.herokuapp.com/flwaterlevelpost"; //BE API URL
+  
+  if (WiFi.status() == WL_CONNECTED) { //if connected to wifi, read the ff codes || conditions
+    //Specify request destination
+    http.begin(httpsClient, apiUrl);
+    http.addHeader("Content-Type", "application/json");
+  
+    //***********************conditions of ultrasonic and http post******************
+    //conditions logic for http post request
+    String display;
+    if(inches >= 150 ){
+      DynamicJsonDocument doc(1024);
+  
+      doc["wlLevel"] = "Level 1";
+      doc["wlInfo"] = "Green Warning";
+      doc["wlTime"] = DatenTime;
+      doc["wlMonth"] = currentMonthName;
+      doc["wlColor"] = "Green";
+      
+      String theData;
+      serializeJson(doc, theData);
+      Serial.println(theData);
+      //LEVEL 1 -> AMBON PALANG || GREEN WARNING
+      //send POST HTTP request
+      Serial.println("connecting HTTPS.... Sending HTTP POST request to FloodWatch....");
+      int httpCode = http.POST(theData); 
+//      int httpCode = http.POST("{\"wlLevel\":\"Level 1\",\"wlInfo\":\"GREEN WARNING\",\"wlTime\":DatenTime,\"wlMonth\":currentMonthName,\"wlColor\":\"Green\"}");
+      getHttpCode(httpCode);
+      Serial.println("wait for 5 minutes..... sapagkat d naman ganoon kabilis ang pag angat ng tubig hehe");
+      delay(600000); //the delay is 300 sec or 5 minutes, and that is according to what i have research that flash floods can rise one foor in just 5 minutes but we can increase that time delay definitely && and include natin to sa paper
+      //for 10 minutes just put 600000
+    }else if(inches > 80 && inches < 100){
+      DynamicJsonDocument doc(1024);
+  
+      doc["wlLevel"] = "Level 2";
+      doc["wlInfo"] = "Yellow Warning";
+      doc["wlTime"] = DatenTime;
+      doc["wlMonth"] = currentMonthName;
+      doc["wlColor"] = "Yellow";
+      
+      String theData;
+      serializeJson(doc, theData);
+      Serial.println(theData);
+      //LEVEL 2 -> MEDYO BAHA || YELLOW WARNING
+      //send post http request
+      Serial.println("connecting HTTPS.... Sending HTTP POST request to FloodWatch...."); 
+      int httpCode = http.POST(theData);
+//      int httpCode = http.POST("{\"wlLevel\":\"Level 2\",\"wlInfo\":\"YELLOW WARNING\",\"wlTime\":DatenTime,\"wlMonth\":currentMonthName,\"wlColor\":\"Yellow\"}");
+      getHttpCode(httpCode);
+      Serial.println("wait for 5 minutes..... sapagkat d naman ganoon kabilis ang pag angat ng tubig hehe");
+      delay(600000);
+   
+    }else if(inches >= 50 && inches <= 80){
+      DynamicJsonDocument doc(1024);
+  
+      doc["wlLevel"] = "Level 3";
+      doc["wlInfo"] = "Orange Warning";
+      doc["wlTime"] = DatenTime;
+      doc["wlMonth"] = currentMonthName;
+      doc["wlColor"] = "Orange";
+      
+      String theData;
+      serializeJson(doc, theData);
+      Serial.println(theData);
+      //LEVEL 3 => GA TUHOD NA BAHA || ORANGE WARNING
+      //send post http request
+      Serial.println("connecting HTTPS.... Sending HTTP POST request to FloodWatch...."); 
+      int httpCode = http.POST(theData);
+//      int httpCode = http.POST("{\"wlLevel\":\"Level 3\",\"wlInfo\":\"ORANGE WARNING\",\"wlTime\":DatenTime,\"wlMonth\":currentMonthName,\"wlColor\":\"Orange\"}");
+      getHttpCode(httpCode);
+      Serial.println("wait for 5 minutes..... sapagkat d naman ganoon kabilis ang pag angat ng tubig hehe");
+      delay(600000);
+    
+    }else if(inches < 50){
+      DynamicJsonDocument doc(1024);
+  
+      doc["wlLevel"] = "Level 4";
+      doc["wlInfo"] = "Red Warning";
+      doc["wlTime"] = DatenTime;
+      doc["wlMonth"] = currentMonthName;
+      doc["wlColor"] = "Red";
+      
+      String theData;
+      serializeJson(doc, theData);
+      Serial.println(theData);
+      //LEVEL 4 -> NALUNOD NA || RED WARNING
+      //send post http request
+      Serial.println("connecting HTTPS.... Sending HTTP POST request to FloodWatch....");
+      int httpCode = http.POST(theData); 
+//      int httpCode = http.POST("{\"wlLevel\":\"Level 4\",\"wlInfo\":\"RED WARNING\",\"wlTime\":DatenTime,\"wlMonth\":currentMonthName,\"wlColor\":\"Red\"}");
+      getHttpCode(httpCode);
+      Serial.println("wait for 5 minutes..... sapagkat d naman ganoon kabilis ang pag angat ng tubig hehe");
+      delay(600000);
+    
+    }else if(inches > 150){
+      Serial.println("The Water Level Is Normal, Have a great Day!");    
+    }
+    //*******************************************************************************
+   
+  }
+
+  Serial.print(inches);
+  Serial.print("in, ");
+  Serial.print(cm);
+  Serial.print("cm");
+  Serial.println();
+  delay(100);
+  
+}
+
+void getHttpCode(int httpCode){ //function for getting httpcode and test it (the returning code)
+  //Check the returning code
+  if (httpCode > 0) { 
+    //Get the request response payload
+    String payload = http.getString();
+    //Print the response payload
+    Serial.println(payload);
+  }else{ //the code is negative ex: -11
+    //Close connection
+    Serial.println(httpCode);
+    http.end();
+  }
+}
+
+long microsecondsToInches(long microseconds) { //Function for MS to INCHES [ultrasonic function]
+  return microseconds / 74 / 2;
+}
+
+long microsecondsToCentimeters(long microseconds) { //Function for MS to CM [ultrasonic function]
+  return microseconds / 29 / 2;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+////--------------------------------------------------------------------------------------
+////for POST
+//const char* ssid = "GlobeAtHome_8B94E";
+//const char* password = "GLRE3HT1Q16";
+//
+//const char *host = "floodwatchbackend.herokuapp.com";
+//const int httpsPort = 443;  //HTTPS= 443 and HTTP = 80
+//
+//#define TEST_HOST_FINGERPRINT "39a9c4feb17e239e2f4dbbace8d7a34fce430e7b"
+//
+//void setup() {
+//  Serial.begin(115200);
+//  Serial.print("Connecting Wifi: ");
+//  Serial.println(ssid);
+//  WiFi.begin(ssid, password);
+//
+//  while (WiFi.status() != WL_CONNECTED) {
+//    Serial.print(".");
+//    delay(500);
+//  }
+//  Serial.println("");
+//  Serial.println("WiFi connected");
+//  Serial.println("IP address: ");
+//  IPAddress ip = WiFi.localIP();
+//  Serial.println(ip);
+//
+//  WiFiClientSecure httpsClient;
+//
+//  // If you want to check the fingerprint
+//  httpsClient.setFingerprint(TEST_HOST_FINGERPRINT);
+//
+//  //TESTING JSON CREATION
+//  Serial.println("Starting JSON.. Converting data to JSON (Serialization).....");
+//  
+//  //char json[] = "{\"wlLevel\":\"Level 2\",\"wlInfo\":\"It is a Yellow Warning\",\"wlTime\":\"04/21/2022 | 4:00 PM\",\"wlMonth\":\"April\",\"wlColor\":\"Yellow\"}";
+//  DynamicJsonDocument doc(192);
+//  
+//  JsonObject doc_0 = doc.createNestedObject();
+//  doc_0["wlLevel"] = "Level 2";
+//  doc_0["wlInfo"] = "It is a Yellow Warning";
+//  doc_0["wlTime"] = "04/6/2022 | 4:00 PM";
+//  doc_0["wlMonth"] = "April";
+//  doc_0["wlColor"] = "Yellow";
+//
+//  String theData;
+//  serializeJson(doc, theData); //converting the data above in JSON format
+//  Serial.print("The Data: ");
+//  Serial.println(theData);     //print the converted data in JSON format
+//
+//  //TESTING POST
+//  String apiUrl = "https://floodwatchbackend.herokuapp.com/flwaterlevelpost";
+//
+//  Serial.println("TESTING POST.. connecting HTTPS....");
+//  
+// //-------------------------------------------------------------------------
+//  //Declare an object of class HTTPClient
+//  HTTPClient http;
+// 
+//  if (WiFi.status() == WL_CONNECTED) {
+//    //Specify request destination
+//    http.begin(httpsClient, apiUrl);
+//    http.addHeader("Content-Type", "application/json");
+//  
+//   //Send the request
+////   int httpCode = http.POST(theData);
+//   int httpCode = http.POST("{\"wlLevel\":\"Level 1\",\"wlInfo\":\"GREEN WARNING\",\"wlTime\":\"04/22/2022 | 6:57 PM\",\"wlMonth\":\"April\",\"wlColor\":\"Green\"}");
+//   
+//
+//   //Check the returning code
+//   if (httpCode > 0) { 
+//     //Get the request response payload
+//     String payload = http.getString();
+//     //Print the response payload
+//     Serial.println(payload);
+//   }else{ //the code is negative ex: -11
+//     //Close connection
+//     Serial.println(httpCode);
+//     http.end();
+//   }
+//    
+//  }
+////-------------------------------------------------------------------------
+//  
+//}
+//
+//void loop() {
+//
+//
+//}
+////--------------------------------------------------------------------------------------
+
+
+
+
+
+
+
+//DO NOT INCLUDE THIS BLOCKS OF CODE BELOW=========================================================================================
+//for GET
 //================================================================================================
 
 ////------- Replace the following! ------
@@ -169,95 +528,3 @@
 //
 //}
 //====================================================================================================
-
-
-
-
-
-const char* ssid = "GlobeAtHome_8B94E";
-const char* password = "GLRE3HT1Q16";
-
-const char *host = "floodwatchbackend.herokuapp.com";
-const int httpsPort = 443;  //HTTPS= 443 and HTTP = 80
-
-#define TEST_HOST_FINGERPRINT "39a9c4feb17e239e2f4dbbace8d7a34fce430e7b"
-
-void setup() {
-  Serial.begin(115200);
-  Serial.print("Connecting Wifi: ");
-  Serial.println(ssid);
-  WiFi.begin(ssid, password);
-
-  while (WiFi.status() != WL_CONNECTED) {
-    Serial.print(".");
-    delay(500);
-  }
-  Serial.println("");
-  Serial.println("WiFi connected");
-  Serial.println("IP address: ");
-  IPAddress ip = WiFi.localIP();
-  Serial.println(ip);
-
-  WiFiClientSecure httpsClient;
-
-  // If you want to check the fingerprint
-  httpsClient.setFingerprint(TEST_HOST_FINGERPRINT);
-
-  //TESTING JSON CREATION
-  Serial.println("Starting JSON.. Converting data to JSON (Serialization).....");
-  
-  //char json[] = "{\"wlLevel\":\"Level 2\",\"wlInfo\":\"It is a Yellow Warning\",\"wlTime\":\"04/21/2022 | 4:00 PM\",\"wlMonth\":\"April\",\"wlColor\":\"Yellow\"}";
-  DynamicJsonDocument doc(192);
-  
-  JsonObject doc_0 = doc.createNestedObject();
-  doc_0["wlLevel"] = "Level 2";
-  doc_0["wlInfo"] = "It is a Yellow Warning";
-  doc_0["wlTime"] = "04/6/2022 | 4:00 PM";
-  doc_0["wlMonth"] = "April";
-  doc_0["wlColor"] = "Yellow";
-
-  String theData;
-  serializeJson(doc, theData); //converting the data above in JSON format
-  Serial.print("The Data: ");
-  Serial.println(theData);     //print the converted data in JSON format
-
-  //TESTING POST
-  String apiUrl = "https://floodwatchbackend.herokuapp.com/flwaterlevelpost";
-
-  Serial.println("TESTING POST.. connecting HTTPS....");
-  
- //-------------------------------------------------------------------------
-  //Declare an object of class HTTPClient
-  HTTPClient http;
- 
-  if (WiFi.status() == WL_CONNECTED) {
-    //Specify request destination
-    http.begin(httpsClient, apiUrl);
-    http.addHeader("Content-Type", "application/json");
-  
-   //Send the request
-//   int httpCode = http.POST(theData);
-   int httpCode = http.POST("{\"wlLevel\":\"Level 1\",\"wlInfo\":\"GREEN WARNING\",\"wlTime\":\"04/22/2022 | 6:57 PM\",\"wlMonth\":\"April\",\"wlColor\":\"Green\"}");
-   
-
-   //Check the returning code
-   if (httpCode > 0) { 
-     //Get the request response payload
-     String payload = http.getString();
-     //Print the response payload
-     Serial.println(payload);
-   }else{ //the code is negative ex: -11
-     //Close connection
-     Serial.println(httpCode);
-     http.end();
-   }
-    
-  }
-//-------------------------------------------------------------------------
-  
-}
-
-void loop() {
-
-
-}
