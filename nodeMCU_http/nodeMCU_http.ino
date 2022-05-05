@@ -13,9 +13,14 @@
 
 
 //ultrasonic fields config below
-const int trigPin = 12; //GPIO 12 = D6
-const int echoPin = 14; //GPIO 14 = D5
-long duration, inches, cm;
+//const int trigPin = 12; //GPIO 12 = D6
+//const int echoPin = 14; //GPIO 14 = D5
+//long duration, inches, cm;
+long inches, cm;
+#define trigPin 12 //GPIO 12 = D6
+#define echoPin 14 //GPIO 14 = D5
+long duration;
+int distance;
 
 //http nodeMCU wifi credentials below
 const char* ssid = "GlobeAtHome_8B94E";
@@ -26,7 +31,7 @@ const char *host = "floodwatchbackend.herokuapp.com";
 const int httpsPort = 443;  //HTTPS= 443 and HTTP = 80
 
 //FW BE fingerprint below
-#define TEST_HOST_FINGERPRINT "39a9c4feb17e239e2f4dbbace8d7a34fce430e7b"
+#define TEST_HOST_FINGERPRINT "2aeeafbb002b5811729e1e98c88cc782525a37e6"
 
 //Declare an object of class HTTPClient
 HTTPClient http;
@@ -111,13 +116,23 @@ void loop() {
   digitalWrite(trigPin, LOW);
   delayMicroseconds(2);
   digitalWrite(trigPin, HIGH);
-  delayMicroseconds(10);
+  delayMicroseconds(20);
   digitalWrite(trigPin, LOW);
 
   duration = pulseIn(echoPin, HIGH);
   inches = microsecondsToInches(duration);
   cm = microsecondsToCentimeters(duration);
+  distance = duration*0.034/2;
 
+  Serial.print("Distance: ");
+  Serial.print(distance);
+  Serial.print(" cm");
+  Serial.print(",  ");
+  Serial.print(inches);
+  Serial.print(" inches");
+  Serial.println();
+  delay(100);
+  
   //nodeMCU http configs below
   WiFiClientSecure httpsClient;
   
@@ -133,7 +148,12 @@ void loop() {
     //***********************conditions of ultrasonic and http post******************
     //conditions logic for http post request
     String display;
-    if(inches >= 150 ){
+    if(distance > 400 || distance == 0){ //LEVEL 0 //greater than 4 meters
+      //LEVEL 0 -> No SMS && NO HTTP Request
+      Serial.println("The Water Level Is Normal, Have a great Day!");  
+
+        
+    }else if(distance > 300 && distance <= 400 ){ //LEVEL 1 //greater than 3 meters and less than or equal to 4 meters
       DynamicJsonDocument doc(1024);
   
       doc["wlLevel"] = "Level 1";
@@ -154,7 +174,7 @@ void loop() {
       Serial.println("wait for 5 minutes..... sapagkat d naman ganoon kabilis ang pag angat ng tubig hehe");
       delay(600000); //the delay is 300 sec or 5 minutes, and that is according to what i have research that flash floods can rise one foor in just 5 minutes but we can increase that time delay definitely && and include natin to sa paper
       //for 10 minutes just put 600000
-    }else if(inches > 80 && inches < 100){
+    }else if(distance > 200 && distance <= 300){ //LEVEL 2 //greater than 2 meters and less than or equal to 3 meters
       DynamicJsonDocument doc(1024);
   
       doc["wlLevel"] = "Level 2";
@@ -175,7 +195,8 @@ void loop() {
       Serial.println("wait for 5 minutes..... sapagkat d naman ganoon kabilis ang pag angat ng tubig hehe");
       delay(600000);
    
-    }else if(inches >= 50 && inches <= 80){
+    }else if(distance > 100 && distance <= 200){ //LEVEL 3 //greater than 1 meter and less than or equal to 2 meters
+
       DynamicJsonDocument doc(1024);
   
       doc["wlLevel"] = "Level 3";
@@ -196,7 +217,7 @@ void loop() {
       Serial.println("wait for 5 minutes..... sapagkat d naman ganoon kabilis ang pag angat ng tubig hehe");
       delay(600000);
     
-    }else if(inches < 50){
+    }else if(distance > 0 && distance <= 100){ //LEVEL 4 //less than or equal to 1 meter
       DynamicJsonDocument doc(1024);
   
       doc["wlLevel"] = "Level 4";
@@ -217,19 +238,12 @@ void loop() {
       Serial.println("wait for 5 minutes..... sapagkat d naman ganoon kabilis ang pag angat ng tubig hehe");
       delay(600000);
     
-    }else if(inches > 150){
-      Serial.println("The Water Level Is Normal, Have a great Day!");    
     }
     //*******************************************************************************
    
   }
 
-  Serial.print(inches);
-  Serial.print("in, ");
-  Serial.print(cm);
-  Serial.print("cm");
-  Serial.println();
-  delay(100);
+
   
 }
 
