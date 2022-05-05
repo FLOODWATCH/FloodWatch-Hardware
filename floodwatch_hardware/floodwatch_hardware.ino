@@ -13,21 +13,27 @@ String f1005 = "+639217095100";
 String phoneNumbers [] = {f1001, f1002, f1003, f1004, f1005};
 
 //ultrasonic set up below
-const int trigPin = 3;
-const int echoPin = 4;
+//const int trigPin = 3;
+//const int echoPin = 4;
 const int piezoPin = 13;
-long duration, inches, cm;
+long inches, cm;
+#define trigPin 3
+#define echoPin 4
+long duration;
+int distance;
+
+
 
 //millis config below
 unsigned long previousMillis = 0;  //will store last time LED was blinked
-const long period = 5000;         // period at which to send SMS
+const long period = 15000;         // period at which to send SMS 15 seconds
 const long configSmsPeriod = 1000; //period for sms function/method (thats the method 3 on the last)
 
 void setup() {
 //---------ULTRASONIC SET UP START-----------------------------------------------------------
   pinMode(trigPin, OUTPUT);  
   pinMode(echoPin, INPUT);  
-  Serial.begin(9600);  
+  Serial.begin(115200); 
 //---------ULTRASONIC SET UP END-----------------------------------------------------------
 
 //---------SIM900 GSM SET UP START-----------------------------------------------------------
@@ -43,15 +49,25 @@ void loop() {
   digitalWrite(trigPin, LOW);
   delayMicroseconds(2);
   digitalWrite(trigPin, HIGH);
-  delayMicroseconds(10);
+  delayMicroseconds(20);
   digitalWrite(trigPin, LOW);
 
   duration = pulseIn(echoPin, HIGH);
   inches = microsecondsToInches(duration);
   cm = microsecondsToCentimeters(duration);
+  distance = duration*0.034/2;
+
+  Serial.print("Distance: ");
+  Serial.print(distance);
+  Serial.print(" cm");
+  Serial.print(",  ");
+  Serial.print(inches);
+  Serial.print(" inches");
+  Serial.println();
+  delay(100);
 
   String display;
-  if(inches > 157){ //greater than 4 meters
+  if(distance > 400 || distance == 0){ //greater than 4 meters
     
     //LEVEL 0 -> No SMS && NO HTTP Request
     unsigned long currentMillis = millis(); // store the current time
@@ -61,7 +77,7 @@ void loop() {
     }
     
     
-  }else if(inches > 118 && inches <= 157 ){ //greater than 3 meters and less than or equal to 4 meters
+  }else if(distance > 300 && distance <= 400 ){ //greater than 3 meters and less than or equal to 4 meters
     
     //LEVEL 1 -> AMBON PALANG
     tone(piezoPin, 000);
@@ -84,7 +100,7 @@ void loop() {
     }    
 
 
-  }else if(inches > 78 && inches <= 118){ //greater than 2 meters and less than or equal to 3 meters
+  }else if(distance > 200 && distance <= 300){ //greater than 2 meters and less than or equal to 3 meters
 
     //LEVEL 2 -> MEDYO BAHA
     tone(piezoPin, 100);
@@ -107,7 +123,7 @@ void loop() {
     }     
 
  
-  }else if(inches > 39 && inches <= 78){ //greater than 1 meter and less than or equal to 2 meters
+  }else if(distance > 100 && distance <= 200){ //greater than 1 meter and less than or equal to 2 meters
 
     //LEVEL 3 => GA TUHOD NA BAHA
     tone(piezoPin, 200);
@@ -130,7 +146,7 @@ void loop() {
     }        
 
   
-  }else if(inches <= 39){ //less than or equal to 1 meter
+  }else if(distance > 0 && distance <= 100 ){ //less than or equal to 1 meter
  
     //LEVEL 4 -> NALUNOD NA
     tone(piezoPin, 500);
@@ -154,12 +170,7 @@ void loop() {
  
   }
  
-  Serial.print(inches);
-  Serial.print("in, ");
-  Serial.print(cm);
-  Serial.print("cm");
-  Serial.println();
-  delay(100);
+
   
  //---------CODES-----------------------------------------------------------
 }
