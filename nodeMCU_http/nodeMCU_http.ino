@@ -12,6 +12,7 @@
 
 
 
+
 //ultrasonic fields config below
 //const int trigPin = 12; //GPIO 12 = D6
 //const int echoPin = 14; //GPIO 14 = D5
@@ -27,11 +28,11 @@ const char* ssid = "GlobeAtHome_8B94E";
 const char* password = "GLRE3HT1Q16";
 
 //our floodwatch backend api url below
-const char *host = "floodwatchbackend.herokuapp.com";
+const char *host = "floodwatch-software-backend.herokuapp.com";
 const int httpsPort = 443;  //HTTPS= 443 and HTTP = 80
 
 //FW BE fingerprint below
-#define TEST_HOST_FINGERPRINT "2aeeafbb002b5811729e1e98c88cc782525a37e6"
+#define TEST_HOST_FINGERPRINT "b5863241d3fb3d2b56260ea3511475e8dcfd4a9b"
 
 //Declare an object of class HTTPClient
 HTTPClient http;
@@ -138,8 +139,8 @@ void loop() {
   
   httpsClient.setFingerprint(TEST_HOST_FINGERPRINT); //check BE webapp fingerprint
   
-  String apiUrl = "https://floodwatchbackend.herokuapp.com/flwaterlevelpost"; //BE API URL
-  
+  String apiUrl = "https://floodwatch-software-backend.herokuapp.com/flwaterlevelpost"; //BE API URL
+  delay(40000);
   if (WiFi.status() == WL_CONNECTED) { //if connected to wifi, read the ff codes || conditions
     //Specify request destination
     http.begin(httpsClient, apiUrl);
@@ -148,19 +149,20 @@ void loop() {
     //***********************conditions of ultrasonic and http post******************
     //conditions logic for http post request
     String display;
-    if(distance > 400 || distance == 0){ //LEVEL 0 //greater than 4 meters
+    if(distance > 350 || distance == 0){ //LEVEL 0 //greater than 4 meters
       //LEVEL 0 -> No SMS && NO HTTP Request
       Serial.println("The Water Level Is Normal, Have a great Day!");  
 
         
-    }else if(distance > 300 && distance <= 400 ){ //LEVEL 1 //greater than 3 meters and less than or equal to 4 meters
+    }else if(distance > 250 && distance <= 350 ){ //LEVEL 1 //greater than 3 meters and less than or equal to 4 meters
       DynamicJsonDocument doc(1024);
   
       doc["wlLevel"] = "Level 1";
-      doc["wlInfo"] = "Green Warning";
+      doc["wlInfo"] = "It is Green Warning, rainfall is at normal level. We have detected a 1 meter increase on the water level of Tanza, Cavite river. But don't let your guard down FloodWatchers! please keep safe and be alert at all times.";
       doc["wlTime"] = DatenTime;
       doc["wlMonth"] = currentMonthName;
       doc["wlColor"] = "Green";
+      doc["wlPercent"] = "25";
       
       String theData;
       serializeJson(doc, theData);
@@ -171,17 +173,18 @@ void loop() {
       int httpCode = http.POST(theData); 
 //      int httpCode = http.POST("{\"wlLevel\":\"Level 1\",\"wlInfo\":\"GREEN WARNING\",\"wlTime\":DatenTime,\"wlMonth\":currentMonthName,\"wlColor\":\"Green\"}");
       getHttpCode(httpCode);
-      Serial.println("wait for 5 minutes..... sapagkat d naman ganoon kabilis ang pag angat ng tubig hehe");
+      Serial.println("wait for 10 minutes..... sapagkat d naman ganoon kabilis ang pag angat ng tubig hehe");
       delay(600000); //the delay is 300 sec or 5 minutes, and that is according to what i have research that flash floods can rise one foor in just 5 minutes but we can increase that time delay definitely && and include natin to sa paper
       //for 10 minutes just put 600000
-    }else if(distance > 200 && distance <= 300){ //LEVEL 2 //greater than 2 meters and less than or equal to 3 meters
+    }else if(distance > 150 && distance <= 250){ //LEVEL 2 //greater than 2 meters and less than or equal to 3 meters
       DynamicJsonDocument doc(1024);
   
       doc["wlLevel"] = "Level 2";
-      doc["wlInfo"] = "Yellow Warning";
+      doc["wlInfo"] = "It is a Yellow Warning, rainfall is above normal level. We have detected a 2 meters increase on the water level of Tanza, Cavite river. Flooding is possible so FloodWatchers!, stay alert at all times.";
       doc["wlTime"] = DatenTime;
       doc["wlMonth"] = currentMonthName;
       doc["wlColor"] = "Yellow";
+      doc["wlPercent"] = "50";
       
       String theData;
       serializeJson(doc, theData);
@@ -192,18 +195,19 @@ void loop() {
       int httpCode = http.POST(theData);
 //      int httpCode = http.POST("{\"wlLevel\":\"Level 2\",\"wlInfo\":\"YELLOW WARNING\",\"wlTime\":DatenTime,\"wlMonth\":currentMonthName,\"wlColor\":\"Yellow\"}");
       getHttpCode(httpCode);
-      Serial.println("wait for 5 minutes..... sapagkat d naman ganoon kabilis ang pag angat ng tubig hehe");
+      Serial.println("wait for 10 minutes..... sapagkat d naman ganoon kabilis ang pag angat ng tubig hehe");
       delay(600000);
    
-    }else if(distance > 100 && distance <= 200){ //LEVEL 3 //greater than 1 meter and less than or equal to 2 meters
+    }else if(distance > 50 && distance <= 150){ //LEVEL 3 //greater than 1 meter and less than or equal to 2 meters
 
       DynamicJsonDocument doc(1024);
   
       doc["wlLevel"] = "Level 3";
-      doc["wlInfo"] = "Orange Warning";
+      doc["wlInfo"] = "Stay Alert FloodWatchers, its an Orange Warning. We have detected a 3 meters increase on the water level of Tanza, Cavite river. Flooding is threatening. Please be prepare and be ready for evacuation, and keep safe and alert at all times.";
       doc["wlTime"] = DatenTime;
       doc["wlMonth"] = currentMonthName;
       doc["wlColor"] = "Orange";
+      doc["wlPercent"] = "75";
       
       String theData;
       serializeJson(doc, theData);
@@ -214,17 +218,18 @@ void loop() {
       int httpCode = http.POST(theData);
 //      int httpCode = http.POST("{\"wlLevel\":\"Level 3\",\"wlInfo\":\"ORANGE WARNING\",\"wlTime\":DatenTime,\"wlMonth\":currentMonthName,\"wlColor\":\"Orange\"}");
       getHttpCode(httpCode);
-      Serial.println("wait for 5 minutes..... sapagkat d naman ganoon kabilis ang pag angat ng tubig hehe");
+      Serial.println("wait for 10 minutes..... sapagkat d naman ganoon kabilis ang pag angat ng tubig hehe");
       delay(600000);
     
-    }else if(distance > 0 && distance <= 100){ //LEVEL 4 //less than or equal to 1 meter
+    }else if(distance > 0 && distance <= 50){ //LEVEL 4 //less than or equal to 1 meter
       DynamicJsonDocument doc(1024);
   
       doc["wlLevel"] = "Level 4";
-      doc["wlInfo"] = "Red Warning";
+      doc["wlInfo"] = "Attention FloodWatchers! It is a Red Warning. We have detected a 4 meters increase on the water level of Tanza, Cavite river. Serious flooding expected in low-lying areas and FULL EVACUATION is needed, please evacuate at nearest evacuation centers.";
       doc["wlTime"] = DatenTime;
       doc["wlMonth"] = currentMonthName;
       doc["wlColor"] = "Red";
+      doc["wlPercent"] = "100";
       
       String theData;
       serializeJson(doc, theData);
@@ -235,7 +240,7 @@ void loop() {
       int httpCode = http.POST(theData); 
 //      int httpCode = http.POST("{\"wlLevel\":\"Level 4\",\"wlInfo\":\"RED WARNING\",\"wlTime\":DatenTime,\"wlMonth\":currentMonthName,\"wlColor\":\"Red\"}");
       getHttpCode(httpCode);
-      Serial.println("wait for 5 minutes..... sapagkat d naman ganoon kabilis ang pag angat ng tubig hehe");
+      Serial.println("wait for 10 minutes..... sapagkat d naman ganoon kabilis ang pag angat ng tubig hehe");
       delay(600000);
     
     }
